@@ -22,6 +22,8 @@ final class Folders {
 	static final Path SOUNDS = ROOT.resolve("sounds");
 
 	private static boolean exported;
+	/** Saved in the config: the built-in files were copied once (so files you delete later stay deleted). */
+	static volatile boolean installed;
 
 	/** Vanilla sounds copied next to Nokia's own: file name -> resource inside the game. */
 	private static final String[][] VANILLA_SOUNDS = {
@@ -30,33 +32,35 @@ final class Folders {
 		{"stone.ogg", "sounds/dig/stone1.ogg"},
 	};
 
-	/** Fills the folders once (only when a folder does not exist yet, so files you delete stay deleted). */
+	/** Copies the built-in textures and sounds that are missing, once (an empty folder you made yourself gets filled too). */
 	static void exportDefaults(Minecraft mc) {
 		if (exported) return;
 		exported = true;
 		LOGGER.info("NokiaQOL folder: {}", ROOT);
+		if (installed) return;
 		try {
-			if (!Files.exists(TEXTURES)) {
-				Files.createDirectories(TEXTURES);
-				for (Skins.Skin s : Skins.ALL) for (Skins.Slot slot : s.slots) copyBuiltIn("textures/" + slot.file + ".png", TEXTURES.resolve(slot.file + ".png"));
-			}
-			if (!Files.exists(SOUNDS)) {
-				Files.createDirectories(SOUNDS);
-				copyBuiltIn("sounds/nokia.ogg", SOUNDS.resolve("nokia.ogg"));
-				for (String[] v : VANILLA_SOUNDS) {
-					try (InputStream in = mc.getResourceManager().getResource(Identifier.withDefaultNamespace(v[1])).orElseThrow().open()) {
-						Files.copy(in, SOUNDS.resolve(v[0]));
-					} catch (Exception e) {
-						LOGGER.warn("could not export vanilla sound {}", v[1], e);
-					}
+			Files.createDirectories(TEXTURES);
+			Files.createDirectories(SOUNDS);
+			for (Skins.Skin s : Skins.ALL) for (Skins.Slot slot : s.slots) copyBuiltIn("textures/" + slot.file + ".png", TEXTURES.resolve(slot.file + ".png"));
+			copyBuiltIn("sounds/nokia.ogg", SOUNDS.resolve("nokia.ogg"));
+			for (String[] v : VANILLA_SOUNDS) {
+				Path to = SOUNDS.resolve(v[0]);
+				if (Files.exists(to)) continue;
+				try (InputStream in = mc.getResourceManager().getResource(Identifier.withDefaultNamespace(v[1])).orElseThrow().open()) {
+					Files.copy(in, to);
+				} catch (Exception e) {
+					LOGGER.warn("could not export vanilla sound {}", v[1], e);
 				}
 			}
+			installed = true;
+			NokiaLite.save();
 		} catch (IOException e) {
-			LOGGER.warn("could not create {}", ROOT, e);
+			LOGGER.warn("could not fill {}", ROOT, e);
 		}
 	}
 
 	private static void copyBuiltIn(String name, Path to) throws IOException {
+		if (Files.exists(to)) return;
 		try (InputStream in = Folders.class.getResourceAsStream("/nokiaqol_lite_defaults/" + name)) {
 			if (in == null) { LOGGER.warn("missing built-in {}", name); return; }
 			Files.copy(in, to);

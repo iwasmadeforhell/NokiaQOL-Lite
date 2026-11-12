@@ -107,6 +107,7 @@ public class NokiaLite implements ClientModInitializer {
 		try (InputStream in = Files.newInputStream(CONFIG)) {
 			p.load(in);
 			Skins.load(p);
+			Folders.installed = Boolean.parseBoolean(p.getProperty("defaults.installed", "false"));
 			alertOn = Boolean.parseBoolean(p.getProperty("alert.on", "true"));
 			alertTitle = Boolean.parseBoolean(p.getProperty("alert.title", "true"));
 			String snd = p.getProperty("alert.sound", "Ding");
@@ -119,6 +120,7 @@ public class NokiaLite implements ClientModInitializer {
 	static void save() {
 		Properties p = new Properties();
 		Skins.save(p);
+		p.setProperty("defaults.installed", Boolean.toString(Folders.installed));
 		p.setProperty("alert.on", Boolean.toString(alertOn));
 		p.setProperty("alert.title", Boolean.toString(alertTitle));
 		p.setProperty("alert.sound", alertSound);
