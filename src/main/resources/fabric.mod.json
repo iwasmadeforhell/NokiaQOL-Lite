@@ -1,0 +1,16 @@
+{
+	"schemaVersion": 1,
+	"id": "nokiaqol_lite",
+	"version": "${version}",
+	"name": "NokiaQOL Lite",
+	"description": "Lightweight SkyBlock QOL: per-ore texture and break-sound skins plus a pickaxe ability alert. Menu: Right Ctrl or /nokialite",
+	"authors": ["3310"],
+	"license": "CC0-1.0",
+	"contact": { "sources": "https://github.com/iwasmadeforhell/NokiaQOL-Lite", "issues": "https://github.com/iwasmadeforhell/NokiaQOL-Lite/issues" },
+	"icon": "assets/nokiaqol_lite/icon.png",
+	"environment": "client",
+	"entrypoints": { "client": ["nokia.lite.NokiaLite"] },
+	"mixins": [{ "config": "nokiaqol_lite.mixins.json", "environment": "client" }],
+	"breaks": { "nokiaqol": "*", "nokia-addons": "*" },
+	"depends": { "fabricloader": ">=0.19.3", "minecraft": "~26.2", "java": ">=25", "fabric-api": "*" }
+}
