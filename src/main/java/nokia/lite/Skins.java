@@ -66,9 +66,19 @@ public final class Skins {
 		/** DEFAULT, SILENT or a file name in NokiaQOL/sounds. */
 		public volatile String sound;
 		public volatile int locs;
+		private final String defSound;
+		private final int defLocs;
 
 		Skin(String id, String label, int locs, String blocks, String sound, Slot... slots) {
 			this.id = id; this.label = label; this.locs = locs; this.blocks = blocks.split(" "); this.sound = sound; this.slots = List.of(slots);
+			this.defSound = sound; this.defLocs = locs;
+		}
+
+		void reset() {
+			on = true;
+			sound = defSound;
+			locs = defLocs;
+			for (Slot slot : slots) slot.chosen = slot.file + ".png";
 		}
 
 		/** False while you are somewhere it is not switched on for. */
@@ -218,6 +228,17 @@ public final class Skins {
 		};
 	}
 
+	/** Back to the built-in settings (before loading a config). */
+	static void resetAll() {
+		for (Skin s : ALL) s.reset();
+		dirty = true;
+	}
+
+	/** File names from a config: no folders, so a config can only point inside NokiaQOL/textures and sounds. */
+	private static final Pattern SAFE_FILE = Pattern.compile("[A-Za-z0-9 _.\\-]{1,100}");
+
+	private static boolean safe(String s) { return s != null && SAFE_FILE.matcher(s).matches(); }
+
 	static void save(Properties p) {
 		for (Skin s : ALL) {
 			p.setProperty("skin." + s.id + ".on", Boolean.toString(s.on));
@@ -233,10 +254,10 @@ public final class Skins {
 			if (on != null) s.on = Boolean.parseBoolean(on);
 			try { String l = p.getProperty("skin." + s.id + ".loc"); if (l != null) s.locs = Integer.parseInt(l) & LOC_ALL; } catch (NumberFormatException ignored) { }
 			String snd = p.getProperty("skin." + s.id + ".sound");
-			if (snd != null) s.sound = legacySound(snd);
+			if (snd != null && (snd.equals(DEFAULT) || snd.equals(SILENT) || safe(legacySound(snd)))) s.sound = legacySound(snd);
 			for (Slot slot : s.slots) {
 				String t = p.getProperty("skin." + s.id + ".tex." + slot.file);
-				if (t != null) slot.chosen = t;
+				if (safe(t)) slot.chosen = t;
 			}
 		}
 		dirty = true;

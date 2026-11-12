@@ -1,17 +1,20 @@
 package nokia.lite;
 
 import com.mojang.blaze3d.platform.NativeImage;
+import java.io.File;
+import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.StringWidget;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
@@ -23,13 +26,18 @@ import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.util.Util;
+import org.lwjgl.PointerBuffer;
 import org.lwjgl.glfw.GLFW;
+import org.lwjgl.system.MemoryStack;
+import org.lwjgl.util.tinyfd.TinyFileDialogs;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * The whole settings menu. One row per ore group: textures on/off, a sound dropdown (files in NokiaQOL/sounds),
- * where it applies (D C S E) and a preview square per texture slot (click one for a dropdown of NokiaQOL/textures).
+ * The whole settings menu. A config bar on top (switch, new, rename, delete, export, import), then one row per ore group:
+ * textures on/off, a sound dropdown (files in NokiaQOL/sounds), where it applies (D C S E) and a preview square per texture
+ * slot (click one for a dropdown of NokiaQOL/textures).
  */
 public class LiteScreen extends Screen {
 	private static final Logger LOGGER = LoggerFactory.getLogger("NokiaLite");
@@ -53,8 +61,21 @@ public class LiteScreen extends Screen {
 	private final List<Identifier> registered = new ArrayList<>();
 	private Dropdown dd;
 
+	/** 0 = config bar, 1 = naming a new config, 2 = renaming the current one. */
+	private int prompt;
+	private String promptText = "";
+	private EditBox promptBox;
+	private boolean confirmDelete;
+	private String status = "";
+	private int statusColor = 0xFFAAAAAA;
+
 	public LiteScreen() {
 		super(Component.literal("NokiaQOL Lite"));
+	}
+
+	private void say(String text, boolean ok) {
+		status = text;
+		statusColor = ok ? 0xFF55FF55 : 0xFFFF5555;
 	}
 
 	private static Component onOff(String label, boolean on) {
@@ -65,15 +86,19 @@ public class LiteScreen extends Screen {
 		return Component.literal((on ? "§a" : "§8") + letter);
 	}
 
+	private static boolean special(String item) {
+		return item.equals(Skins.DEFAULT) || item.equals(Skins.SILENT) || NokiaLite.ALERT_BUILT_IN.contains(item);
+	}
+
 	/** Button text for a sound choice, shortened to fit. */
 	private static Component soundLabel(String choice) {
-		String t = choice.equals(Skins.DEFAULT) || choice.equals(Skins.SILENT) || NokiaLite.ALERT_BUILT_IN.contains(choice) ? choice : Folders.shown(choice);
+		String t = special(choice) ? choice : Folders.shown(choice);
 		if (t.length() > 14) t = t.substring(0, 13) + "…";
 		return Component.literal("Sound: " + t);
 	}
 
 	private static String itemLabel(String item) {
-		return item.equals(Skins.DEFAULT) || item.equals(Skins.SILENT) || NokiaLite.ALERT_BUILT_IN.contains(item) ? item : Folders.shown(item);
+		return special(item) ? item : Folders.shown(item);
 	}
 
 	// --- previews --------------------------------------------------------------------------------------
@@ -94,11 +119,15 @@ public class LiteScreen extends Screen {
 		}
 	}
 
-	@Override
-	public void removed() {
+	private void releasePreviews() {
 		for (Identifier id : registered) minecraft.getTextureManager().release(id);
 		registered.clear();
 		previews = null;
+	}
+
+	@Override
+	public void removed() {
+		releasePreviews();
 	}
 
 	private Preview previewOf(Skins.Slot slot) {
@@ -177,6 +206,7 @@ public class LiteScreen extends Screen {
 	@Override
 	public void extractRenderState(GuiGraphicsExtractor g, int mx, int my, float pt) {
 		super.extractRenderState(g, mx, my, pt);
+		if (!status.isEmpty()) g.text(font, status, width / 2 - 228, height - 11, statusColor);
 		Dropdown d = dd;
 		if (d == null) return;
 		g.fill(d.x, d.y, d.x + d.w, d.y + d.height(), 0xF0101010);
@@ -228,7 +258,66 @@ public class LiteScreen extends Screen {
 	@Override
 	public boolean keyPressed(KeyEvent e) {
 		if (dd != null && e.key() == GLFW.GLFW_KEY_ESCAPE) { dd = null; return true; }
+		if (prompt != 0) {
+			if (e.key() == GLFW.GLFW_KEY_ESCAPE) { prompt = 0; rebuildWidgets(); return true; }
+			if (e.key() == GLFW.GLFW_KEY_ENTER || e.key() == GLFW.GLFW_KEY_KP_ENTER) { confirmPrompt(); return true; }
+		}
 		return super.keyPressed(e);
+	}
+
+	// --- configs ---------------------------------------------------------------------------------------
+
+	private void confirmPrompt() {
+		String text = promptBox.getValue();
+		if (prompt == 1) {
+			say("Created config " + Profiles.create(text), true);
+		} else if (Profiles.rename(text)) {
+			say("Renamed to " + Profiles.active, true);
+		} else {
+			say("That name is empty or already used", false);
+		}
+		prompt = 0;
+		rebuildWidgets();
+	}
+
+	private void export() {
+		try {
+			Path zip = Profiles.export();
+			Util.getPlatform().openPath(zip.getParent());
+			say("Exported " + zip.getFileName() + " (NokiaQOL/exports)", true);
+		} catch (IOException e) {
+			LOGGER.warn("export failed", e);
+			say("Export failed: " + e.getMessage(), false);
+		}
+	}
+
+	/** Opens the system file dialog (off the game thread) and imports the zip you pick. */
+	private void pickImport() {
+		Path start = Files.isDirectory(Profiles.EXPORTS) ? Profiles.EXPORTS : Folders.ROOT;
+		Thread t = new Thread(() -> {
+			String path;
+			try (MemoryStack stack = MemoryStack.stackPush()) {
+				PointerBuffer filters = stack.mallocPointer(1);
+				filters.put(stack.UTF8("*.zip")).flip();
+				path = TinyFileDialogs.tinyfd_openFileDialog("Import a NokiaQOL config", start + File.separator, filters, "NokiaQOL config (*.zip)", false);
+			}
+			if (path != null) minecraft.execute(() -> doImport(Path.of(path)));
+		}, "NokiaLite-import");
+		t.setDaemon(true);
+		t.start();
+	}
+
+	private void doImport(Path zip) {
+		try {
+			say("Imported as " + Profiles.importZip(zip), true);
+		} catch (IOException | RuntimeException e) {
+			LOGGER.warn("import failed", e);
+			say("Import failed: " + e.getMessage(), false);
+		}
+		if (minecraft.gui.screen() == this) {
+			releasePreviews(); // the zip may have brought new textures
+			rebuildWidgets();
+		}
 	}
 
 	// --- layout ----------------------------------------------------------------------------------------
@@ -241,17 +330,64 @@ public class LiteScreen extends Screen {
 		return items;
 	}
 
+	private void buildConfigBar(int x, int y) {
+		String shown = Profiles.active.length() > 14 ? Profiles.active.substring(0, 13) + "…" : Profiles.active;
+		addRenderableWidget(Button.builder(Component.literal("Config: " + shown), b -> openDropdown(x, y, 20, 140, Profiles.list(), Profiles.active, false, name -> {
+			if (name.equals(Profiles.active)) return;
+			Profiles.switchTo(name);
+			say("Loaded config " + name, true);
+			rebuildWidgets();
+		})).bounds(x, y, 140, 20).build());
+		addRenderableWidget(Button.builder(Component.literal("New"), b -> { prompt = 1; promptText = Profiles.unique("Config"); rebuildWidgets(); })
+			.bounds(x + 144, y, 38, 20).tooltip(Tooltip.create(Component.literal("New config, starting as a copy of this one"))).build());
+		addRenderableWidget(Button.builder(Component.literal("Rename"), b -> { prompt = 2; promptText = Profiles.active; rebuildWidgets(); })
+			.bounds(x + 186, y, 52, 20).build());
+		Button del = Button.builder(Component.literal("Delete"), b -> {
+			if (!confirmDelete) { confirmDelete = true; b.setMessage(Component.literal("§cSure?")); return; }
+			confirmDelete = false;
+			String gone = Profiles.active;
+			if (Profiles.delete()) say("Deleted config " + gone, true);
+			rebuildWidgets();
+		}).bounds(x + 242, y, 46, 20).tooltip(Tooltip.create(Component.literal("Click twice to delete this config"))).build();
+		del.active = Profiles.list().size() > 1;
+		addRenderableWidget(del);
+		addRenderableWidget(Button.builder(Component.literal("Export"), b -> export()).bounds(x + 296, y, 52, 20)
+			.tooltip(Tooltip.create(Component.literal("Save this config and its textures and sounds as a zip in NokiaQOL/exports"))).build());
+		addRenderableWidget(Button.builder(Component.literal("Import"), b -> pickImport()).bounds(x + 352, y, 52, 20)
+			.tooltip(Tooltip.create(Component.literal("Pick an exported zip"))).build());
+	}
+
+	private void buildPrompt(int x, int y) {
+		addRenderableWidget(new StringWidget(x, y + 6, 50, 9, Component.literal(prompt == 1 ? "New:" : "Rename:"), font));
+		EditBox box = new EditBox(font, x + 52, y, 180, 20, Component.literal("Config name"));
+		box.setMaxLength(24);
+		box.setValue(promptText);
+		box.setResponder(v -> {
+			String clean = v.replaceAll("[^A-Za-z0-9 _-]", "");
+			if (!clean.equals(v)) box.setValue(clean);
+		});
+		promptBox = box;
+		addRenderableWidget(box);
+		setInitialFocus(box);
+		addRenderableWidget(Button.builder(Component.literal("OK"), b -> confirmPrompt()).bounds(x + 236, y, 50, 20).build());
+		addRenderableWidget(Button.builder(Component.literal("Cancel"), b -> { prompt = 0; rebuildWidgets(); }).bounds(x + 290, y, 60, 20).build());
+	}
+
 	@Override
 	protected void init() {
 		if (previews == null) loadPreviews();
 		dd = null;
+		confirmDelete = false;
 		int rows = Skins.ALL.size() + 4;
-		int rowH = Math.max(20, Math.min(24, (height - 64) / rows));
+		int rowH = Math.max(20, Math.min(24, (height - 96) / rows));
 		int bh = rowH - 4;
 		int x = width / 2 - 228;
-		int y = 38;
-		addRenderableWidget(new StringWidget(x, 8, 456, 9, title, font));
-		addRenderableWidget(new StringWidget(x, 20, 456, 9, Component.literal("§7D = Dwarven Mines/Glacite Tunnels   C = Crystal Hollows   S = Mineshafts   E = elsewhere"), font));
+		addRenderableWidget(new StringWidget(x, 4, 456, 9, title, font));
+		addRenderableWidget(new StringWidget(x, 15, 456, 9, Component.literal("§7D = Dwarven Mines/Glacite Tunnels   C = Crystal Hollows   S = Mineshafts   E = elsewhere"), font));
+		int barY = 27;
+		if (prompt == 0) buildConfigBar(x, barY);
+		else buildPrompt(x, barY);
+		int y = barY + 28;
 
 		for (Skins.Skin s : Skins.ALL) {
 			addRenderableWidget(new StringWidget(x, y + 6, 76, 9, Component.literal(s.label), font));
@@ -307,9 +443,8 @@ public class LiteScreen extends Screen {
 			NokiaLite.save();
 			b.setMessage(onOff("Title", NokiaLite.alertTitle));
 		}).bounds(x + 78, y, 84, bh).build());
-		y += rowH + 2;
-		addRenderableWidget(Button.builder(Component.literal("Open folder"), b -> Folders.open()).bounds(width / 2 - 104, y, 100, 20)
+		addRenderableWidget(Button.builder(Component.literal("Open folder"), b -> Folders.open()).bounds(x + 290, y, 100, bh)
 			.tooltip(Tooltip.create(Component.literal("NokiaQOL folder: put your own .png textures and .ogg/.mp3/.wav sounds in it"))).build());
-		addRenderableWidget(Button.builder(Component.literal("Done"), b -> onClose()).bounds(width / 2 + 4, y, 100, 20).build());
+		addRenderableWidget(Button.builder(Component.literal("Done"), b -> onClose()).bounds(x + 394, y, 62, bh).build());
 	}
 }

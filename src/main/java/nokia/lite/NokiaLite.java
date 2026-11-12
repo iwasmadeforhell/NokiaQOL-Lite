@@ -106,7 +106,9 @@ public class NokiaLite implements ClientModInitializer {
 		Properties p = new Properties();
 		try (InputStream in = Files.newInputStream(CONFIG)) {
 			p.load(in);
-			Skins.load(p);
+			Profiles.active = Profiles.sanitize(p.getProperty("config.active", "default"));
+			if (Profiles.active.isEmpty()) Profiles.active = "default";
+			Profiles.loadActive(p); // the config file, or the skin settings an older version kept in this file
 			Folders.installed = Boolean.parseBoolean(p.getProperty("defaults.installed", "false"));
 			alertOn = Boolean.parseBoolean(p.getProperty("alert.on", "true"));
 			alertTitle = Boolean.parseBoolean(p.getProperty("alert.title", "true"));
@@ -118,8 +120,9 @@ public class NokiaLite implements ClientModInitializer {
 	}
 
 	static void save() {
+		Profiles.saveActive();
 		Properties p = new Properties();
-		Skins.save(p);
+		p.setProperty("config.active", Profiles.active);
 		p.setProperty("defaults.installed", Boolean.toString(Folders.installed));
 		p.setProperty("alert.on", Boolean.toString(alertOn));
 		p.setProperty("alert.title", Boolean.toString(alertTitle));
