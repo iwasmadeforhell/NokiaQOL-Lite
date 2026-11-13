@@ -101,6 +101,7 @@ public class LiteScreen extends Screen {
 		"Breaking any block that is not in an ore group above (or not in its ticked places)",
 		"Picking up experience orbs",
 		"Your hits: strong, weak, crit, knockback, sweep and no-damage",
+		"The cracking sound while you hit a block, before it breaks (any block)",
 	};
 
 	private static Component extraLabel(String label, String choice) {
@@ -218,7 +219,7 @@ public class LiteScreen extends Screen {
 	@Override
 	public void extractRenderState(GuiGraphicsExtractor g, int mx, int my, float pt) {
 		super.extractRenderState(g, mx, my, pt);
-		if (!status.isEmpty()) g.text(font, status, width / 2 - 228, height - 11, statusColor);
+		if (!status.isEmpty()) g.text(font, status, width / 2 - 238, height - 11, statusColor);
 		Dropdown d = dd;
 		if (d == null) return;
 		g.fill(d.x, d.y, d.x + d.w, d.y + d.height(), 0xF0101010);
@@ -393,9 +394,9 @@ public class LiteScreen extends Screen {
 		int rows = Skins.ALL.size() + 5;
 		int rowH = Math.max(20, Math.min(24, (height - 96) / rows));
 		int bh = rowH - 4;
-		int x = width / 2 - 228;
-		addRenderableWidget(new StringWidget(x, 4, 456, 9, title, font));
-		addRenderableWidget(new StringWidget(x, 15, 456, 9, Component.literal("§7D = Dwarven Mines/Glacite Tunnels   C = Crystal Hollows   S = Mineshafts   E = elsewhere"), font));
+		int x = width / 2 - 238;
+		addRenderableWidget(new StringWidget(x, 4, 476, 9, title, font));
+		addRenderableWidget(new StringWidget(x, 15, 476, 9, Component.literal("§7D = Dwarven Mines/Tunnels  C = Crystal Hollows  S = Mineshafts  E = elsewhere  P = particles"), font));
 		int barY = 27;
 		if (prompt == 0) buildConfigBar(x, barY);
 		else buildPrompt(x, barY);
@@ -426,11 +427,16 @@ public class LiteScreen extends Screen {
 					b.setMessage(locLabel(letter, (s.locs & bit) != 0));
 				}).bounds(x + 290 + i * 20, y, 20, bh).tooltip(Tooltip.create(Component.literal(Skins.LOC_NAME[i]))).build());
 			}
+			addRenderableWidget(Button.builder(locLabel("P", s.particles), b -> {
+				s.particles = !s.particles;
+				NokiaLite.save();
+				b.setMessage(locLabel("P", s.particles));
+			}).bounds(x + 372, y, 20, bh).tooltip(Tooltip.create(Component.literal("Particles when you hit and break these blocks (grey = hidden)"))).build());
 			int lines = (s.slots.size() + PER_LINE - 1) / PER_LINE;
 			int blockH = lines * (PREVIEW + 1) - 1;
 			int py = y + (bh - blockH) / 2;
 			for (int i = 0; i < s.slots.size(); i++) {
-				addRenderableWidget(new SlotButton(x + 376 + (i % PER_LINE) * (PREVIEW + 1), py + (i / PER_LINE) * (PREVIEW + 1), s.slots.get(i)));
+				addRenderableWidget(new SlotButton(x + 396 + (i % PER_LINE) * (PREVIEW + 1), py + (i / PER_LINE) * (PREVIEW + 1), s.slots.get(i)));
 			}
 			y += rowH;
 		}
@@ -439,13 +445,13 @@ public class LiteScreen extends Screen {
 		addRenderableWidget(new StringWidget(x, y + 6, 76, 9, Component.literal("Other sounds"), font));
 		for (int i = 0; i < Skins.EXTRA.length; i++) {
 			String key = Skins.EXTRA[i][0], label = Skins.EXTRA[i][1];
-			int ex = x + 78 + i * 114, ey = y;
+			int ex = x + 78 + i * 96, ey = y;
 			addRenderableWidget(Button.builder(extraLabel(label, Skins.extra.get(key)), b -> openDropdown(ex, ey, bh, 110, soundChoices(false), Skins.extra.get(key), false, pick -> {
 				Skins.extra.put(key, pick);
 				NokiaLite.save();
 				b.setMessage(extraLabel(label, pick));
 				Skins.previewExtra(key);
-			})).bounds(ex, ey, 110, bh).tooltip(Tooltip.create(Component.literal(EXTRA_TIPS[i]))).build());
+			})).bounds(ex, ey, 92, bh).tooltip(Tooltip.create(Component.literal(EXTRA_TIPS[i]))).build());
 		}
 		y += rowH;
 		addRenderableWidget(new StringWidget(x, y + 6, 90, 9, Component.literal("Ability alert"), font));
@@ -467,8 +473,8 @@ public class LiteScreen extends Screen {
 			NokiaLite.save();
 			b.setMessage(onOff("Title", NokiaLite.alertTitle));
 		}).bounds(x + 78, y, 84, bh).build());
-		addRenderableWidget(Button.builder(Component.literal("Open folder"), b -> Folders.open()).bounds(x + 290, y, 100, bh)
+		addRenderableWidget(Button.builder(Component.literal("Open folder"), b -> Folders.open()).bounds(x + 310, y, 100, bh)
 			.tooltip(Tooltip.create(Component.literal("NokiaQOL folder: put your own .png textures and .ogg/.mp3/.wav sounds in it"))).build());
-		addRenderableWidget(Button.builder(Component.literal("Done"), b -> onClose()).bounds(x + 394, y, 62, bh).build());
+		addRenderableWidget(Button.builder(Component.literal("Done"), b -> onClose()).bounds(x + 414, y, 62, bh).build());
 	}
 }

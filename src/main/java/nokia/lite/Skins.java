@@ -63,6 +63,8 @@ public final class Skins {
 		final String[] blocks;
 		public final List<Slot> slots;
 		public volatile boolean on = true;
+		/** False = no break or crack particles for these blocks (where the group applies). */
+		public volatile boolean particles = true;
 		/** DEFAULT, SILENT or a file name in NokiaQOL/sounds. */
 		public volatile String sound;
 		public volatile int locs;
@@ -76,6 +78,7 @@ public final class Skins {
 
 		void reset() {
 			on = true;
+			particles = true;
 			sound = defSound;
 			locs = defLocs;
 			for (Slot slot : slots) slot.chosen = slot.file + ".png";
@@ -154,14 +157,14 @@ public final class Skins {
 		return byBlock;
 	}
 
-	/** Sounds outside the ore groups, which the Nokia Overlay pack also replaced: key and button label. */
-	public static final String[][] EXTRA = {{"other", "Blocks"}, {"xp", "XP"}, {"hit", "Hits"}};
+	/** Sounds outside the ore groups: key, button label, default. Blocks/XP/Hits are what the Nokia Overlay pack replaced. */
+	public static final String[][] EXTRA = {{"other", "Blocks", "nokia.ogg"}, {"xp", "XP", "nokia.ogg"}, {"hit", "Hits", "nokia.ogg"}, {"dig", "Dig", DEFAULT}};
 	/** Key -> DEFAULT, SILENT or a file in NokiaQOL/sounds. */
 	public static final Map<String, String> extra = new java.util.concurrent.ConcurrentHashMap<>();
 	static { resetExtra(); }
 
 	private static void resetExtra() {
-		for (String[] e : EXTRA) extra.put(e[0], "nokia.ogg");
+		for (String[] e : EXTRA) extra.put(e[0], e[2]);
 	}
 
 	private static final java.util.Random RANDOM = new java.util.Random();
@@ -182,10 +185,30 @@ public final class Skins {
 		return playChoice(choice, Sounds.BREAK_GAIN * Sounds.volume(SoundSource.BLOCKS), 0.9f, 1.1f);
 	}
 
-	/** Called for every sound the game plays: XP pickup and player hit sounds get their own sound. True = handled. */
+	/** /nokialite sounds: name every sound the game plays in chat. */
+	public static volatile boolean logSounds;
+	private static final Map<String, Long> LOGGED = new HashMap<>();
+
+	/** True if break/crack particles of {@code state} should not show. */
+	public static boolean hideParticles(BlockState state) {
+		Skin s = byBlock().get(state.getBlock());
+		return s != null && s.active() && !s.particles;
+	}
+
+	/** Called for every sound the game plays: XP pickup, player hits and block digging get their own sound. True = handled. */
 	public static boolean handleSound(Identifier id, SoundSource source) {
+		if (logSounds) {
+			long now = System.currentTimeMillis();
+			Long last = LOGGED.get(id.toString());
+			if (last == null || now - last > 1500) {
+				LOGGED.put(id.toString(), now);
+				Minecraft.getInstance().gui.hud.getChat().addClientSystemMessage(net.minecraft.network.chat.Component.literal("\u00a77[NokiaLite] sound: \u00a7f" + id + " \u00a78(" + source.getName() + ")"));
+			}
+		}
 		if (source == SoundSource.UI || !id.getNamespace().equals("minecraft")) return false; // UI: the menu's own previews and the alert
 		String p = id.getPath();
+		// the cracking sound every few ticks while you hit a block (the break sound is handled in handleBreak)
+		if (p.startsWith("block.") && p.endsWith(".hit")) return playChoice(extra.get("dig"), 0.5f * Sounds.BREAK_GAIN * Sounds.volume(source), 0.9f, 1.1f);
 		// pitch ranges and loudness as the pack had them: XP like block breaks, hits higher and a bit louder
 		if (p.equals("entity.experience_orb.pickup")) return playChoice(extra.get("xp"), Sounds.BREAK_GAIN * Sounds.volume(source), 0.9f, 1.1f);
 		if (p.startsWith("entity.player.attack.")) return playChoice(extra.get("hit"), 1.5f * Sounds.BREAK_GAIN * Sounds.volume(source), 1.8f, 2.0f);
@@ -276,6 +299,7 @@ public final class Skins {
 	static void save(Properties p) {
 		for (Skin s : ALL) {
 			p.setProperty("skin." + s.id + ".on", Boolean.toString(s.on));
+			p.setProperty("skin." + s.id + ".particles", Boolean.toString(s.particles));
 			p.setProperty("skin." + s.id + ".sound", s.sound);
 			p.setProperty("skin." + s.id + ".loc", Integer.toString(s.locs));
 			for (Slot slot : s.slots) p.setProperty("skin." + s.id + ".tex." + slot.file, slot.chosen);
@@ -287,6 +311,8 @@ public final class Skins {
 		for (Skin s : ALL) {
 			String on = p.getProperty("skin." + s.id + ".on");
 			if (on != null) s.on = Boolean.parseBoolean(on);
+			String parts = p.getProperty("skin." + s.id + ".particles");
+			if (parts != null) s.particles = Boolean.parseBoolean(parts);
 			try { String l = p.getProperty("skin." + s.id + ".loc"); if (l != null) s.locs = Integer.parseInt(l) & LOC_ALL; } catch (NumberFormatException ignored) { }
 			String snd = p.getProperty("skin." + s.id + ".sound");
 			if (snd != null && (snd.equals(DEFAULT) || snd.equals(SILENT) || safe(legacySound(snd)))) s.sound = legacySound(snd);

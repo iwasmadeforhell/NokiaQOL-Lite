@@ -2,6 +2,6 @@
 	"required": true,
 	"package": "nokia.lite.mixin",
 	"compatibilityLevel": "JAVA_25",
-	"client": ["LevelEventHandlerMixin", "SoundManagerMixin"],
+	"client": ["LevelEventHandlerMixin", "SoundManagerMixin", "ClientLevelMixin"],
 	"injectors": { "defaultRequire": 1 }
 }

@@ -154,6 +154,7 @@ final class Profiles {
 		Map<String, Path> files = new LinkedHashMap<>(); // zip entry -> source
 		for (Skins.Skin s : Skins.ALL) {
 			out.setProperty("skin." + s.id + ".on", Boolean.toString(s.on));
+			out.setProperty("skin." + s.id + ".particles", Boolean.toString(s.particles));
 			out.setProperty("skin." + s.id + ".loc", Integer.toString(s.locs));
 			String snd = s.sound;
 			if (!snd.equals(Skins.DEFAULT) && !snd.equals(Skins.SILENT) && Sounds.exists(snd)) {

@@ -54,6 +54,11 @@ public class NokiaLite implements ClientModInitializer {
 		ClientCommandRegistrationCallback.EVENT.register((dispatcher, ctx) -> dispatcher.register(
 			ClientCommands.literal("nokialite")
 				.executes(c -> { openRequested = true; return Command.SINGLE_SUCCESS; })
+				.then(ClientCommands.literal("sounds").executes(c -> {
+					Skins.logSounds = !Skins.logSounds;
+					c.getSource().sendFeedback(Component.literal("[NokiaLite] sound names in chat: " + (Skins.logSounds ? "on (run it again to stop)" : "off")));
+					return Command.SINGLE_SUCCESS;
+				}))
 				.then(ClientCommands.literal("debug").executes(c -> {
 					c.getSource().sendFeedback(Component.literal("[NokiaLite] area: '" + Skins.readAreaText(Minecraft.getInstance()) + "'"));
 					for (Skins.Skin s : Skins.ALL) c.getSource().sendFeedback(Component.literal("[NokiaLite] " + s.id + ": " + (s.on ? (s.active() ? "active" : "waiting for area") : "off")));
