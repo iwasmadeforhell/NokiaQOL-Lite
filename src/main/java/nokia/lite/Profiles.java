@@ -169,6 +169,14 @@ final class Profiles {
 				out.setProperty("skin." + s.id + ".tex." + slot.file, name);
 			}
 		}
+		for (String[] e : Skins.EXTRA) {
+			String snd = Skins.extra.get(e[0]);
+			if (!snd.equals(Skins.DEFAULT) && !snd.equals(Skins.SILENT) && Sounds.exists(snd)) {
+				files.put("sounds/" + prefix + snd, Folders.SOUNDS.resolve(snd));
+				snd = prefix + snd;
+			}
+			out.setProperty("sound." + e[0], snd);
+		}
 		Files.createDirectories(EXPORTS);
 		Path zip = EXPORTS.resolve(active.replace(' ', '_') + ".zip");
 		try (ZipOutputStream z = new ZipOutputStream(Files.newOutputStream(zip))) {

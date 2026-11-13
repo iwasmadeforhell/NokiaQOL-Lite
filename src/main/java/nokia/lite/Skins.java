@@ -154,14 +154,47 @@ public final class Skins {
 		return byBlock;
 	}
 
-	/** Called from the mixin: plays the chosen sound for breaking {@code state}. True = handled (skip the game's own sound). */
+	/** Sounds outside the ore groups, which the Nokia Overlay pack also replaced: key and button label. */
+	public static final String[][] EXTRA = {{"other", "Blocks"}, {"xp", "XP"}, {"hit", "Hits"}};
+	/** Key -> DEFAULT, SILENT or a file in NokiaQOL/sounds. */
+	public static final Map<String, String> extra = new java.util.concurrent.ConcurrentHashMap<>();
+	static { resetExtra(); }
+
+	private static void resetExtra() {
+		for (String[] e : EXTRA) extra.put(e[0], "nokia.ogg");
+	}
+
+	private static final java.util.Random RANDOM = new java.util.Random();
+
+	/** Plays a choice at a random pitch in [lo, hi]. True = handled (the game's own sound must not play). */
+	private static boolean playChoice(String choice, float gain, float lo, float hi) {
+		if (choice == null || choice.equals(DEFAULT)) return false;
+		if (choice.equals(SILENT)) return true;
+		if (!Sounds.exists(choice)) return false; // file deleted: the game's own sound
+		Sounds.play(choice, gain, lo + RANDOM.nextFloat() * (hi - lo));
+		return true;
+	}
+
+	/** Called from the mixin: plays the chosen sound for breaking {@code state} (an ore group's, else "Blocks"). True = handled. */
 	public static boolean handleBreak(BlockState state) {
 		Skin s = byBlock().get(state.getBlock());
-		if (s == null || !s.active() || s.sound.equals(DEFAULT)) return false;
-		if (s.sound.equals(SILENT)) return true;
-		if (!Sounds.exists(s.sound)) return false; // file deleted: the game's own sound
-		Sounds.play(s.sound, Sounds.BREAK_GAIN * Sounds.volume(SoundSource.BLOCKS));
-		return true;
+		String choice = s != null && s.active() ? s.sound : extra.get("other");
+		return playChoice(choice, Sounds.BREAK_GAIN * Sounds.volume(SoundSource.BLOCKS), 0.9f, 1.1f);
+	}
+
+	/** Called for every sound the game plays: XP pickup and player hit sounds get their own sound. True = handled. */
+	public static boolean handleSound(Identifier id, SoundSource source) {
+		if (source == SoundSource.UI || !id.getNamespace().equals("minecraft")) return false; // UI: the menu's own previews and the alert
+		String p = id.getPath();
+		// pitch ranges and loudness as the pack had them: XP like block breaks, hits higher and a bit louder
+		if (p.equals("entity.experience_orb.pickup")) return playChoice(extra.get("xp"), Sounds.BREAK_GAIN * Sounds.volume(source), 0.9f, 1.1f);
+		if (p.startsWith("entity.player.attack.")) return playChoice(extra.get("hit"), 1.5f * Sounds.BREAK_GAIN * Sounds.volume(source), 1.8f, 2.0f);
+		return false;
+	}
+
+	/** The menu's preview of an EXTRA sound. */
+	static void previewExtra(String key) {
+		playChoice(extra.get(key), Sounds.BREAK_GAIN * Sounds.volume(SoundSource.MASTER), key.equals("hit") ? 1.9f : 1f, key.equals("hit") ? 1.9f : 1f);
 	}
 
 	private static int tick;
@@ -231,6 +264,7 @@ public final class Skins {
 	/** Back to the built-in settings (before loading a config). */
 	static void resetAll() {
 		for (Skin s : ALL) s.reset();
+		resetExtra();
 		dirty = true;
 	}
 
@@ -246,6 +280,7 @@ public final class Skins {
 			p.setProperty("skin." + s.id + ".loc", Integer.toString(s.locs));
 			for (Slot slot : s.slots) p.setProperty("skin." + s.id + ".tex." + slot.file, slot.chosen);
 		}
+		for (String[] e : EXTRA) p.setProperty("sound." + e[0], extra.get(e[0]));
 	}
 
 	static void load(Properties p) {
@@ -259,6 +294,10 @@ public final class Skins {
 				String t = p.getProperty("skin." + s.id + ".tex." + slot.file);
 				if (safe(t)) slot.chosen = t;
 			}
+		}
+		for (String[] e : EXTRA) {
+			String v = p.getProperty("sound." + e[0]);
+			if (v != null && (v.equals(DEFAULT) || v.equals(SILENT) || safe(v))) extra.put(e[0], v);
 		}
 		dirty = true;
 	}

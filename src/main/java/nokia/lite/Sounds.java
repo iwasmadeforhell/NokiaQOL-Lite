@@ -39,13 +39,17 @@ final class Sounds {
 	/** True if {@code file} exists in the sounds folder. */
 	static boolean exists(String file) { return Files.isRegularFile(Folders.SOUNDS.resolve(file)); }
 
-	static void play(String file, float gain) {
+	static void play(String file, float gain) { play(file, gain, 1f); }
+
+	/** {@code pitch} 2 = an octave up and half as long, like Minecraft's pitch. */
+	static void play(String file, float gain, float pitch) {
 		Path path = Folders.SOUNDS.resolve(file);
 		Thread t = new Thread(() -> {
 			try {
 				Pcm pcm = load(path);
 				if (pcm == null) return;
 				byte[] data = scale(pcm.bytes(), gain);
+				if (pitch != 1f) data = resample(data, pcm.format().getChannels(), pitch);
 				SourceDataLine line = AudioSystem.getSourceDataLine(pcm.format());
 				line.open(pcm.format());
 				line.start();
@@ -69,6 +73,28 @@ final class Sounds {
 			int n = Math.max(-32768, Math.min(32767, (int) (s * g)));
 			out[i] = (byte) n;
 			out[i + 1] = (byte) (n >> 8);
+		}
+		return out;
+	}
+
+	/** Linear-interpolation resampling of 16-bit little-endian samples: plays {@code pitch} times faster and higher. */
+	private static byte[] resample(byte[] src, int ch, float pitch) {
+		int frames = src.length / (2 * ch);
+		int outFrames = (int) (frames / pitch);
+		if (frames < 2 || outFrames < 1) return src;
+		byte[] out = new byte[outFrames * 2 * ch];
+		for (int f = 0; f < outFrames; f++) {
+			double pos = f * (double) pitch;
+			int i = Math.min((int) pos, frames - 1);
+			int j = Math.min(i + 1, frames - 1);
+			double t = pos - i;
+			for (int c = 0; c < ch; c++) {
+				int a = (short) ((src[(i * ch + c) * 2 + 1] << 8) | (src[(i * ch + c) * 2] & 0xFF));
+				int b = (short) ((src[(j * ch + c) * 2 + 1] << 8) | (src[(j * ch + c) * 2] & 0xFF));
+				int v = (int) Math.round(a + (b - a) * t);
+				out[(f * ch + c) * 2] = (byte) v;
+				out[(f * ch + c) * 2 + 1] = (byte) (v >> 8);
+			}
 		}
 		return out;
 	}
