@@ -14,6 +14,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public class SoundManagerMixin {
 	@Inject(method = "play", at = @At("HEAD"), cancellable = true)
 	private void nokialite$play(SoundInstance sound, CallbackInfoReturnable<SoundEngine.PlayResult> cir) {
-		if (Skins.handleSound(sound.getIdentifier(), sound.getSource())) cir.setReturnValue(SoundEngine.PlayResult.NOT_STARTED);
+		if (Skins.handleSound(sound)) cir.setReturnValue(SoundEngine.PlayResult.NOT_STARTED);
 	}
 }

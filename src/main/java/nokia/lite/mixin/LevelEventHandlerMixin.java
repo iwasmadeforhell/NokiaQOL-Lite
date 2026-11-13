@@ -35,6 +35,6 @@ public class LevelEventHandlerMixin {
 		)
 	)
 	private void nokialite$breakSound(ClientLevel level, BlockPos pos, SoundEvent sound, SoundSource source, float volume, float pitch, boolean distanceDelay, Operation<Void> original) {
-		if (!Skins.handleBreak(Block.stateById(nokialite$data))) original.call(level, pos, sound, source, volume, pitch, distanceDelay);
+		if (!Skins.handleBreak(Block.stateById(nokialite$data), pos)) original.call(level, pos, sound, source, volume, pitch, distanceDelay);
 	}
 }

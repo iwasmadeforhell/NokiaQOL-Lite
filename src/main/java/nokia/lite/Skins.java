@@ -178,11 +178,19 @@ public final class Skins {
 		return true;
 	}
 
+	/** Blocks broken in the last moment: position -> when, and whether we played our own sound for it. */
+	private record Recent(long time, boolean handled) { }
+	private static final Map<Long, Recent> RECENT = new HashMap<>();
+
 	/** Called from the mixin: plays the chosen sound for breaking {@code state} (an ore group's, else "Blocks"). True = handled. */
-	public static boolean handleBreak(BlockState state) {
+	public static boolean handleBreak(BlockState state, net.minecraft.core.BlockPos pos) {
 		Skin s = byBlock().get(state.getBlock());
 		String choice = s != null && s.active() ? s.sound : extra.get("other");
-		return playChoice(choice, Sounds.BREAK_GAIN * Sounds.volume(SoundSource.BLOCKS), 0.9f, 1.1f);
+		boolean handled = playChoice(choice, Sounds.BREAK_GAIN * Sounds.volume(SoundSource.BLOCKS), 0.9f, 1.1f);
+		long now = System.currentTimeMillis();
+		if (RECENT.size() > 64) RECENT.values().removeIf(r -> now - r.time() > 1000);
+		RECENT.put(pos.asLong(), new Recent(now, handled));
+		return handled;
 	}
 
 	/** /nokialite sounds: name every sound the game plays in chat. */
@@ -196,7 +204,9 @@ public final class Skins {
 	}
 
 	/** Called for every sound the game plays: XP pickup, player hits and block digging get their own sound. True = handled. */
-	public static boolean handleSound(Identifier id, SoundSource source) {
+	public static boolean handleSound(net.minecraft.client.resources.sounds.SoundInstance sound) {
+		Identifier id = sound.getIdentifier();
+		SoundSource source = sound.getSource();
 		if (logSounds) {
 			long now = System.currentTimeMillis();
 			Long last = LOGGED.get(id.toString());
@@ -207,7 +217,14 @@ public final class Skins {
 		}
 		if (source == SoundSource.UI || !id.getNamespace().equals("minecraft")) return false; // UI: the menu's own previews and the alert
 		String p = id.getPath();
-		// the cracking sound every few ticks while you hit a block (the break sound is handled in handleBreak)
+		// Hypixel also sends its own break sound (stone, deepslate...) as a packet: silence it if we already played ours for
+		// that block, else give it the "Blocks" sound like any other break
+		if (p.startsWith("block.") && p.endsWith(".break")) {
+			Recent r = RECENT.get(net.minecraft.core.BlockPos.containing(sound.getX(), sound.getY(), sound.getZ()).asLong());
+			if (r != null && System.currentTimeMillis() - r.time() < 500) return r.handled();
+			return playChoice(extra.get("other"), Sounds.BREAK_GAIN * Sounds.volume(source), 0.9f, 1.1f);
+		}
+		// the cracking sound every few ticks while you hit a block
 		if (p.startsWith("block.") && p.endsWith(".hit")) return playChoice(extra.get("dig"), 0.5f * Sounds.BREAK_GAIN * Sounds.volume(source), 0.9f, 1.1f);
 		// pitch ranges and loudness as the pack had them: XP like block breaks, hits higher and a bit louder
 		if (p.equals("entity.experience_orb.pickup")) return playChoice(extra.get("xp"), Sounds.BREAK_GAIN * Sounds.volume(source), 0.9f, 1.1f);
