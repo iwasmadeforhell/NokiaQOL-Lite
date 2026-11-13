@@ -102,6 +102,8 @@ public class LiteScreen extends Screen {
 		"Picking up experience orbs",
 		"Your hits: strong, weak, crit, knockback, sweep and no-damage",
 		"The cracking sound while you hit a block, before it breaks (any block)",
+		"Note-block chimes (Hypixel plays these a lot); each note keeps its pitch",
+		"The windy ambient sound in the Magma Fields (breeze idle)",
 	};
 
 	private static Component extraLabel(String label, String choice) {
@@ -391,7 +393,8 @@ public class LiteScreen extends Screen {
 		if (previews == null) loadPreviews();
 		dd = null;
 		confirmDelete = false;
-		int rows = Skins.ALL.size() + 5;
+		int extraLines = (Skins.EXTRA.length + 3) / 4;
+		int rows = Skins.ALL.size() + 4 + extraLines;
 		int rowH = Math.max(20, Math.min(24, (height - 96) / rows));
 		int bh = rowH - 4;
 		int x = width / 2 - 238;
@@ -445,7 +448,7 @@ public class LiteScreen extends Screen {
 		addRenderableWidget(new StringWidget(x, y + 6, 76, 9, Component.literal("Other sounds"), font));
 		for (int i = 0; i < Skins.EXTRA.length; i++) {
 			String key = Skins.EXTRA[i][0], label = Skins.EXTRA[i][1];
-			int ex = x + 78 + i * 96, ey = y;
+			int ex = x + 78 + (i % 4) * 96, ey = y + (i / 4) * rowH;
 			addRenderableWidget(Button.builder(extraLabel(label, Skins.extra.get(key)), b -> openDropdown(ex, ey, bh, 110, soundChoices(false), Skins.extra.get(key), false, pick -> {
 				Skins.extra.put(key, pick);
 				NokiaLite.save();
@@ -453,7 +456,7 @@ public class LiteScreen extends Screen {
 				Skins.previewExtra(key);
 			})).bounds(ex, ey, 92, bh).tooltip(Tooltip.create(Component.literal(EXTRA_TIPS[i]))).build());
 		}
-		y += rowH;
+		y += rowH * extraLines;
 		addRenderableWidget(new StringWidget(x, y + 6, 90, 9, Component.literal("Ability alert"), font));
 		addRenderableWidget(Button.builder(onOff("Alert", NokiaLite.alertOn), b -> {
 			NokiaLite.alertOn = !NokiaLite.alertOn;

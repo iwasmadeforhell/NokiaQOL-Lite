@@ -158,7 +158,23 @@ public final class Skins {
 	}
 
 	/** Sounds outside the ore groups: key, button label, default. Blocks/XP/Hits are what the Nokia Overlay pack replaced. */
-	public static final String[][] EXTRA = {{"other", "Blocks", "nokia.ogg"}, {"xp", "XP", "nokia.ogg"}, {"hit", "Hits", "nokia.ogg"}, {"dig", "Dig", DEFAULT}};
+	public static final String[][] EXTRA = {{"other", "Blocks", "nokia.ogg"}, {"xp", "XP", "nokia.ogg"}, {"hit", "Hits", "nokia.ogg"}, {"dig", "Dig", DEFAULT},
+		{"chime", "Chimes", DEFAULT}, {"wind", "Wind", DEFAULT}};
+
+	/** The note a sound instance asks for (its own pitch field: getPitch() needs the sound resolved first). */
+	private static float notePitch(net.minecraft.client.resources.sounds.SoundInstance sound) {
+		if (!(sound instanceof net.minecraft.client.resources.sounds.AbstractSoundInstance)) return 1f;
+		try {
+			if (PITCH == null) {
+				PITCH = net.minecraft.client.resources.sounds.AbstractSoundInstance.class.getDeclaredField("pitch");
+				PITCH.setAccessible(true);
+			}
+			return Math.max(0.5f, Math.min(2f, PITCH.getFloat(sound)));
+		} catch (ReflectiveOperationException e) {
+			return 1f;
+		}
+	}
+	private static java.lang.reflect.Field PITCH;
 	/** Key -> DEFAULT, SILENT or a file in NokiaQOL/sounds. */
 	public static final Map<String, String> extra = new java.util.concurrent.ConcurrentHashMap<>();
 	static { resetExtra(); }
@@ -224,6 +240,12 @@ public final class Skins {
 			if (r != null && System.currentTimeMillis() - r.time() < 500) return r.handled();
 			return playChoice(extra.get("other"), Sounds.BREAK_GAIN * Sounds.volume(source), 0.9f, 1.1f);
 		}
+		// Hypixel's note-block chimes keep their note; its windy Magma Fields ambience is the breeze idle sound
+		if (p.startsWith("block.note_block.")) {
+			float note = notePitch(sound);
+			return playChoice(extra.get("chime"), Sounds.BREAK_GAIN * Sounds.volume(source), note, note);
+		}
+		if (p.startsWith("entity.breeze.idle")) return playChoice(extra.get("wind"), Sounds.BREAK_GAIN * Sounds.volume(source), 0.9f, 1.1f);
 		// the cracking sound every few ticks while you hit a block
 		if (p.startsWith("block.") && p.endsWith(".hit")) return playChoice(extra.get("dig"), 0.5f * Sounds.BREAK_GAIN * Sounds.volume(source), 0.9f, 1.1f);
 		// pitch ranges and loudness as the pack had them: XP like block breaks, hits higher and a bit louder
